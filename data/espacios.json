@@ -1,0 +1,27 @@
+[
+  {
+    "nombre": "Sala 301",
+    "capacidad": 20,
+    "franjas": [
+      {"dia": "lunes", "hora": "8:00 a. m. - 10:00 a. m.", "disponible": true, "reservado_por": null},
+      {"dia": "lunes", "hora": "10:00 a. m. - 12:00 m.", "disponible": true, "reservado_por": null},
+      {"dia": "martes", "hora": "6:00 p. m. - 8:00 p. m.", "disponible": true, "reservado_por": null}
+    ]
+  },
+  {
+    "nombre": "Laboratorio 2",
+    "capacidad": 15,
+    "franjas": [
+      {"dia": "lunes", "hora": "10:00 a. m. - 12:00 m.", "disponible": true, "reservado_por": null},
+      {"dia": "miércoles", "hora": "8:00 a. m. - 10:00 a. m.", "disponible": true, "reservado_por": null}
+    ]
+  },
+  {
+    "nombre": "Aula 405",
+    "capacidad": 30,
+    "franjas": [
+      {"dia": "martes", "hora": "6:00 p. m. - 8:00 p. m.", "disponible": true, "reservado_por": null},
+      {"dia": "jueves", "hora": "6:00 p. m. - 8:00 p. m.", "disponible": true, "reservado_por": null}
+    ]
+  }
+]
