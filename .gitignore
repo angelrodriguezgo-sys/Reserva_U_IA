@@ -6,3 +6,5 @@ __pycache__/
 .env/
 ia*
 /ia/
+# IA es el paquete  ,  ia\Scripts\activate
+# codigo de run; streamlit run app.py

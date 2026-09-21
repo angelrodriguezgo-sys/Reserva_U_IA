@@ -1,20 +1,10 @@
-"""Interfaz principal del asistente de reserva de espacios desarrollado con Streamlit.
+"""Interfaz principal del Asistente de Reserva de Espacios con Streamlit + LangChain.
 
-Este módulo configura y ejecuta la interfaz web del asistente de reserva
-de espacios universitarios. Gestiona la visualización del estado del
-estudiante, el historial de conversación y la interacción entre el
-usuario y el agente basado en Gemini.
-
-El flujo principal de la aplicación incluye:
-
-- Validación de la configuración requerida.
-- Inicialización del estado de sesión.
-- Visualización del nombre y correo del estudiante.
-- Renderizado del historial de conversación.
-- Captura de nuevos mensajes del usuario.
-- Actualización del estado y la memoria conversacional.
-- Generación de respuestas mediante el agente de reserva de espacios.
-- Reinicio de la conversación cuando el usuario lo solicita.
+Este módulo configura y ejecuta la interfaz web del asistente. Gestiona
+la visualización de los datos del estudiante, el historial de
+conversación, el detalle de la última ejecución (ruta tomada por el
+router y herramientas usadas) y la interacción entre el usuario y el
+agente basado en Gemini + LangChain.
 """
 
 import streamlit as st
@@ -26,6 +16,7 @@ from core.state import (
     actualizar_estado_estudiante,
     inicializar_estado,
     obtener_memoria,
+    registrar_ejecucion,
     reiniciar_estado,
 )
 
@@ -51,17 +42,35 @@ inicializar_estado()
 # Encabezado principal de la aplicación.
 st.title("Asistente de Reserva de Espacios")
 st.caption("Universidad Católica Luis Amigó")
-st.write("Consulta espacios disponibles, reserva salas y revisa tus reservas.")
+st.write(
+    "Consulta espacios disponibles, reserva salas y revisa tus reservas. "
+    "Con LangChain: Chain de enrutamiento, Agent y múltiples Tools."
+)
 
 
-# Panel lateral con la información conocida del estudiante.
+# Panel lateral: datos del estudiante y detalle de la última ejecución.
 with st.sidebar:
     st.subheader("Datos del estudiante")
 
     estudiante = st.session_state.estudiante
-
     st.write("Nombre:", estudiante["nombre"])
     st.write("Correo:", estudiante["correo"])
+
+    st.divider()
+    st.subheader("Última ejecución")
+
+    ejecucion = st.session_state.ultima_ejecucion
+    st.write("Ruta:", ejecucion["ruta"])
+
+    if ejecucion["motivo"]:
+        st.caption(ejecucion["motivo"])
+
+    if ejecucion["tools"]:
+        st.write("Tools utilizadas:")
+        for nombre in ejecucion["tools"]:
+            st.write(f"- {nombre}")
+    else:
+        st.write("Tools utilizadas: ninguna")
 
     st.divider()
 
@@ -87,17 +96,25 @@ if prompt:
     agregar_mensaje("user", prompt)
 
     try:
-        respuesta = responder(
+        resultado = responder(
             mensaje_usuario=prompt,
             estudiante=st.session_state.estudiante,
             memoria=obtener_memoria(),
         )
+        respuesta = resultado["respuesta"]
+        registrar_ejecucion(resultado)
+
     except Exception as error:
-        respuesta = f"Ocurrió un error al consultar Gemini: {error}"
+        respuesta = f"Ocurrió un error al procesar la solicitud: {error}"
+        resultado = None
 
     with st.chat_message("assistant"):
         st.markdown(respuesta)
 
-    agregar_mensaje("assistant", respuesta)
+        if resultado and resultado.get("reserva_exitosa"):
+            st.success("✅ ¡Reserva realizada con éxito!")
+            st.balloons()
 
+    agregar_mensaje("assistant", respuesta)
+    
     st.rerun()
