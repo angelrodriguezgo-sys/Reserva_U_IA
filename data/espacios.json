@@ -1,27 +1,47 @@
 [
   {
+    "id": "sala-301",
     "nombre": "Sala 301",
     "capacidad": 20,
-    "franjas": [
-      {"dia": "lunes", "hora": "8:00 a. m. - 10:00 a. m.", "disponible": true, "reservado_por": null},
-      {"dia": "lunes", "hora": "10:00 a. m. - 12:00 m.", "disponible": true, "reservado_por": null},
-      {"dia": "martes", "hora": "6:00 p. m. - 8:00 p. m.", "disponible": true, "reservado_por": null}
-    ]
+    "tipo": "aula",
+    "equipamiento": ["proyector", "tablero", "wifi"],
+    "mantenimiento_recurrente": ["domingo"],
+    "mantenimiento_fechas": []
   },
   {
+    "id": "lab-2",
     "nombre": "Laboratorio 2",
     "capacidad": 15,
-    "franjas": [
-      {"dia": "lunes", "hora": "10:00 a. m. - 12:00 m.", "disponible": true, "reservado_por": null},
-      {"dia": "miércoles", "hora": "8:00 a. m. - 10:00 a. m.", "disponible": true, "reservado_por": null}
-    ]
+    "tipo": "laboratorio",
+    "equipamiento": ["computadores", "proyector", "wifi", "aire acondicionado"],
+    "mantenimiento_recurrente": ["domingo"],
+    "mantenimiento_fechas": ["2026-10-15"]
   },
   {
+    "id": "aula-405",
     "nombre": "Aula 405",
     "capacidad": 30,
-    "franjas": [
-      {"dia": "martes", "hora": "6:00 p. m. - 8:00 p. m.", "disponible": true, "reservado_por": null},
-      {"dia": "jueves", "hora": "6:00 p. m. - 8:00 p. m.", "disponible": true, "reservado_por": null}
-    ]
+    "tipo": "aula",
+    "equipamiento": ["tablero", "wifi"],
+    "mantenimiento_recurrente": ["domingo"],
+    "mantenimiento_fechas": []
+  },
+  {
+    "id": "sala-conferencia-1",
+    "nombre": "Sala de Conferencias 1",
+    "capacidad": 12,
+    "tipo": "sala de conferencia",
+    "equipamiento": ["proyector", "pantalla táctil", "wifi", "cámara de videoconferencia"],
+    "mantenimiento_recurrente": ["domingo", "sábado"],
+    "mantenimiento_fechas": []
+  },
+  {
+    "id": "auditorio-1",
+    "nombre": "Auditorio 1",
+    "capacidad": 100,
+    "tipo": "auditorio",
+    "equipamiento": ["proyector", "sistema de sonido", "micrófonos", "wifi"],
+    "mantenimiento_recurrente": ["domingo"],
+    "mantenimiento_fechas": ["2026-11-01"]
   }
 ]

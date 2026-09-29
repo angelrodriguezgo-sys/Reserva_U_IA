@@ -1,0 +1,9 @@
+[
+  {"id": "h1", "hora_inicio": "06:00", "hora_fin": "08:00"},
+  {"id": "h2", "hora_inicio": "08:00", "hora_fin": "10:00"},
+  {"id": "h3", "hora_inicio": "10:00", "hora_fin": "12:00"},
+  {"id": "h4", "hora_inicio": "12:00", "hora_fin": "14:00"},
+  {"id": "h5", "hora_inicio": "14:00", "hora_fin": "16:00"},
+  {"id": "h6", "hora_inicio": "16:00", "hora_fin": "18:00"},
+  {"id": "h7", "hora_inicio": "18:00", "hora_fin": "20:00"}
+]

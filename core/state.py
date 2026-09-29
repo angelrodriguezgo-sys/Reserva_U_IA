@@ -1,22 +1,51 @@
-"""Gestión del estado de sesión del estudiante en Streamlit."""
+"""Gestión del estado de sesión y memoria del estudiante en Streamlit.
+
+Este módulo administra la información básica del estudiante, el historial
+de mensajes y el detalle de la última ejecución del agente, almacenados
+en ``st.session_state``.
+
+También incluye utilidades para identificar el nombre y el correo del
+estudiante a partir de texto libre, construir una memoria reciente de la
+conversación y reiniciar el estado de la sesión.
+"""
 
 import re
 
 import streamlit as st
 
 
+# Estado inicial utilizado cuando aún no se ha identificado al estudiante.
 ESTUDIANTE_INICIAL = {
     "nombre": "No registrado",
     "correo": "No registrado",
 }
 
+# Estado inicial del detalle de la última ejecución del agente.
+EJECUCION_INICIAL = {
+    "ruta": "N/A",
+    "motivo": "",
+    "tools": [],
+}
+
 
 def inicializar_estado() -> None:
+    """Inicializa las variables necesarias en el estado de sesión.
+
+    Crea la información inicial del estudiante, el historial de mensajes
+    y el detalle de la última ejecución, únicamente cuando dichas variables
+    aún no existen en ``st.session_state``.
+
+    Esto permite conservar la información entre las distintas ejecuciones
+    de la aplicación Streamlit dentro de una misma sesión.
+    """
     if "estudiante" not in st.session_state:
         st.session_state.estudiante = ESTUDIANTE_INICIAL.copy()
 
     if "mensajes" not in st.session_state:
         st.session_state.mensajes = []
+
+    if "ultima_ejecucion" not in st.session_state:
+        st.session_state.ultima_ejecucion = EJECUCION_INICIAL.copy()
 
 
 def actualizar_estado_estudiante(texto: str) -> None:
@@ -31,8 +60,7 @@ def actualizar_estado_estudiante(texto: str) -> None:
     coincidencia_nombre = re.search(patron_nombre, texto_limpio, re.IGNORECASE)
 
     if coincidencia_nombre:
-        primer_nombre = coincidencia_nombre.group(1)
-        st.session_state.estudiante["nombre"] = primer_nombre.capitalize()
+        st.session_state.estudiante["nombre"] = coincidencia_nombre.group(1).capitalize()
 
     # 2. Si aún no hay nombre registrado y el estudiante escribió solo su nombre
     #    (sin correo, sin números, y como máximo un par de palabras), se asume
@@ -48,7 +76,7 @@ def actualizar_estado_estudiante(texto: str) -> None:
         primer_nombre = texto_limpio.split()[0]
         st.session_state.estudiante["nombre"] = primer_nombre.capitalize()
 
-    # Detecta el correo en cualquier parte del mensaje
+    # Detecta el correo en cualquier parte del mensaje.
     patron_correo = r"[\w\.-]+@[\w\.-]+\.\w+"
     coincidencia_correo = re.search(patron_correo, texto_limpio)
     if coincidencia_correo:
@@ -56,16 +84,66 @@ def actualizar_estado_estudiante(texto: str) -> None:
 
 
 def agregar_mensaje(role: str, content: str) -> None:
-    st.session_state.mensajes.append({"role": role, "content": content})
+    """Agrega un mensaje al historial de conversación de la sesión.
 
+    Args:
+        role: Rol asociado al mensaje, por ejemplo ``"user"`` o
+            ``"assistant"``.
+        content: Contenido textual del mensaje que se desea almacenar.
+    """
+    st.session_state.mensajes.append(
+        {
+            "role": role,
+            "content": content,
+        }
+    )
+
+
+def registrar_ejecucion(resultado: dict) -> None:
+    """Guarda en la sesión la información de la última ejecución del agente.
+
+    Args:
+        resultado: Diccionario devuelto por ``core.agent.responder``, con
+            las claves ``ruta``, ``motivo`` y ``tools``.
+    """
+    st.session_state.ultima_ejecucion = {
+        "ruta": resultado.get("ruta", "N/A"),
+        "motivo": resultado.get("motivo", ""),
+        "tools": resultado.get("tools", []),
+    }
 
 
 def obtener_memoria(limite: int = 6) -> str:
-    mensajes = st.session_state.mensajes[-limite:]
-    return "\n".join(f"{m['role']}: {m['content']}" for m in mensajes)
+    """Construye una representación textual de los mensajes recientes.
 
+    Recupera los últimos mensajes almacenados en la sesión y los convierte
+    en una cadena de texto que puede utilizarse como contexto o memoria
+    conversacional.
+
+    Args:
+        limite: Número máximo de mensajes recientes que se incluirán.
+            Por defecto se utilizan los últimos 6 mensajes.
+
+    Returns:
+        Cadena con los mensajes recientes en formato ``"role: content"``,
+        separados por saltos de línea. Devuelve una cadena vacía si no
+        existen mensajes almacenados.
+    """
+    mensajes = st.session_state.mensajes[-limite:]
+
+    return "\n".join(
+        f"{mensaje['role']}: {mensaje['content']}"
+        for mensaje in mensajes
+    )
 
 
 def reiniciar_estado() -> None:
+    """Restablece la información de la sesión a sus valores iniciales.
+
+    Elimina el historial de conversación, reemplaza la información del
+    estudiante por una nueva copia de ``ESTUDIANTE_INICIAL`` y reinicia
+    el detalle de la última ejecución.
+    """
     st.session_state.mensajes = []
     st.session_state.estudiante = ESTUDIANTE_INICIAL.copy()
+    st.session_state.ultima_ejecucion = EJECUCION_INICIAL.copy()

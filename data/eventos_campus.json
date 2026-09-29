@@ -1,0 +1,16 @@
+[
+  {
+    "evento": "Semana de exámenes finales",
+    "descripcion": "Alta demanda de salas de estudio; se recomienda reservar con anticipación",
+    "fecha_inicio": "2026-11-23",
+    "fecha_fin": "2026-11-27",
+    "espacios_afectados": "todos"
+  },
+  {
+    "evento": "Graduación",
+    "descripcion": "El auditorio principal estará reservado para la ceremonia",
+    "fecha_inicio": "2026-12-10",
+    "fecha_fin": "2026-12-10",
+    "espacios_afectados": "auditorio-1"
+  }
+]
