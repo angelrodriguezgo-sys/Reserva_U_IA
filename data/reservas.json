@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "c0076095-6efe-4438-b713-6cb25417290c",
+    "espacio_id": "lab-2",
+    "horario_id": "h3",
+    "fecha": "2026-10-19",
+    "nombre_estudiante": "Angel",
+    "correo_estudiante": "angel@gmail.com"
+  },
+  {
+    "id": "60d7a2fe-774a-4a95-b744-92adf18ffdf7",
+    "espacio_id": "lab-2",
+    "horario_id": "h4",
+    "fecha": "2026-10-19",
+    "nombre_estudiante": "Angel",
+    "correo_estudiante": "angel@gmail.com"
+  }
+]
