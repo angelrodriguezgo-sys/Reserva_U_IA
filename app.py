@@ -1,24 +1,22 @@
-"""Interfaz principal del Asistente de Reserva de Espacios con Streamlit + LangChain.
+"""Interfaz principal del Asistente de Reserva de Espacios (Streamlit + LangGraph).
 
-Este módulo configura y ejecuta la interfaz web del asistente. Gestiona
-la visualización de los datos del estudiante, el historial de
-conversación, el detalle de la última ejecución (ruta tomada por el
-router y herramientas usadas) y la interacción entre el usuario y el
-agente basado en Gemini + LangChain.
+Muestra los datos del estudiante, el historial de conversación y el detalle
+de la última ejecución (ruta tomada por el enrutador y herramientas usadas),
+y conecta la entrada del usuario con el grafo de LangGraph.
 """
 
 import streamlit as st
 
 from config.settings import validar_configuracion
-from core.agent import responder
-from core.state import (
-    agregar_mensaje,
+from core.session import (
     actualizar_estado_estudiante,
+    agregar_mensaje,
     inicializar_estado,
     obtener_memoria,
     registrar_ejecucion,
     reiniciar_estado,
 )
+from graph.workflow import responder
 
 
 st.set_page_config(
@@ -44,7 +42,7 @@ st.title("Asistente de Reserva de Espacios")
 st.caption("Universidad Católica Luis Amigó")
 st.write(
     "Consulta espacios disponibles, reserva salas y revisa tus reservas. "
-    "Con LangChain: Chain de enrutamiento, Agent y múltiples Tools."
+    "Con LangGraph: enrutador, agente y múltiples herramientas."
 )
 
 
@@ -85,8 +83,16 @@ for mensaje in st.session_state.mensajes:
         st.markdown(mensaje["content"])
 
 
+# Alerta de reserva exitosa: se muestra después del rerun para que no se borre.
+if st.session_state.pop("reserva_confirmada", False):
+    st.success("✅ ¡Reserva realizada con éxito!")
+    st.balloons()
+
+
 # Captura una nueva consulta del estudiante.
-prompt = st.chat_input("Escribe tu solicitud (ej. reservar un espacio, consultar disponibilidad)...")
+prompt = st.chat_input(
+    "Escribe tu solicitud (ej. reservar un espacio, consultar disponibilidad)..."
+)
 
 if prompt:
     with st.chat_message("user"):
@@ -100,21 +106,17 @@ if prompt:
             mensaje_usuario=prompt,
             estudiante=st.session_state.estudiante,
             memoria=obtener_memoria(),
+            thread_id=st.session_state.thread_id,
         )
         respuesta = resultado["respuesta"]
         registrar_ejecucion(resultado)
 
+        if resultado.get("reserva_exitosa"):
+            st.session_state.reserva_confirmada = True
+
     except Exception as error:
         respuesta = f"Ocurrió un error al procesar la solicitud: {error}"
-        resultado = None
 
-    with st.chat_message("assistant"):
-        st.markdown(respuesta)
-
-        if resultado and resultado.get("reserva_exitosa"):
-            st.success("✅ ¡Reserva realizada con éxito!")
-            st.balloons()
-
+    # El historial se vuelve a dibujar tras el rerun, con la respuesta incluida.
     agregar_mensaje("assistant", respuesta)
-    
     st.rerun()
