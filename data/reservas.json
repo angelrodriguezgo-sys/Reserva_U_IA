@@ -14,5 +14,13 @@
     "fecha": "2026-10-19",
     "nombre_estudiante": "Angel",
     "correo_estudiante": "angel@gmail.com"
+  },
+  {
+    "id": "1049c9b3-abdb-49c5-be19-67f07535cf37",
+    "espacio_id": "sala-301",
+    "horario_id": "h1",
+    "fecha": "2026-11-05",
+    "nombre_estudiante": "Angel",
+    "correo_estudiante": "angel@amigo.edu.co"
   }
 ]

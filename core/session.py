@@ -1,8 +1,12 @@
 """Gestión del estado de sesión del estudiante en Streamlit.
 
-Administra los datos del estudiante, el historial de mensajes, el detalle
-de la última ejecución del grafo y el identificador de hilo (thread_id)
-que usa LangGraph para separar la memoria de cada conversación.
+Administra la cuenta activa del estudiante, las cuentas anteriores de la
+misma conversación, el historial de mensajes, el detalle de la última
+ejecución del grafo y el thread_id que usa LangGraph.
+
+Cuando alguien inicia con otra cuenta, la anterior se archiva y el
+historial completo se conserva: cada mensaje queda marcado con la cuenta
+a la que pertenece.
 """
 
 import re
@@ -11,10 +15,12 @@ import uuid
 import streamlit as st
 
 
+NO_REGISTRADO = "No registrado"
+
 # Estado inicial utilizado cuando aún no se ha identificado al estudiante.
 ESTUDIANTE_INICIAL = {
-    "nombre": "No registrado",
-    "correo": "No registrado",
+    "nombre": NO_REGISTRADO,
+    "correo": NO_REGISTRADO,
 }
 
 # Estado inicial del detalle de la última ejecución.
@@ -23,12 +29,15 @@ EJECUCION_INICIAL = {
     "motivo": "",
     "tools": [],
 }
-
-PATRON_CORREO = r"[\w\.-]+@[\w\.-]+\.\w+"
+from core.acceso import PATRON_CORREO, es_correo_institucional
 PATRON_NOMBRE_EXPLICITO = (
     r"(?:soy|me llamo|mi nombre es|nombre:?)\s+([A-Za-zÁÉÍÓÚáéíóúÑñ]+)"
 )
 PATRON_SOLO_NOMBRE = r"[A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s+[A-Za-zÁÉÍÓÚáéíóúÑñ]+){0,2}"
+PATRON_CAMBIO_CUENTA = (
+    r"(?:otra cuenta|nueva cuenta|cambiar de cuenta|cambio de cuenta|"
+    r"otro usuario|ahora soy)"
+)
 
 
 def inicializar_estado() -> None:
@@ -45,6 +54,63 @@ def inicializar_estado() -> None:
     if "thread_id" not in st.session_state:
         st.session_state.thread_id = uuid.uuid4().hex
 
+    if "cuenta_id" not in st.session_state:
+        st.session_state.cuenta_id = 0
+
+    if "cuentas_anteriores" not in st.session_state:
+        st.session_state.cuentas_anteriores = []
+
+
+def _hay_cuenta_activa() -> bool:
+    estudiante = st.session_state.estudiante
+    return (
+        estudiante["nombre"] != NO_REGISTRADO
+        or estudiante["correo"] != NO_REGISTRADO
+    )
+
+def acceso_permitido() -> bool:
+    """True si la cuenta activa tiene un correo institucional registrado."""
+    correo = st.session_state.estudiante["correo"]
+    return correo != NO_REGISTRADO and es_correo_institucional(correo)
+
+def iniciar_nueva_cuenta() -> bool:
+    """Archiva la cuenta activa y deja una cuenta vacía en la misma conversación.
+
+    No borra mensajes. Abre un hilo nuevo para el agente, de modo que el
+    contexto de una cuenta no se mezcle con el de otra; el hilo anterior
+    queda guardado junto con la cuenta archivada.
+
+    Returns:
+        True si se archivó una cuenta; False si no había cuenta activa.
+    """
+    if not _hay_cuenta_activa():
+        return False
+
+    anterior = st.session_state.estudiante
+    st.session_state.cuentas_anteriores.append(
+        {
+            "cuenta_id": st.session_state.cuenta_id,
+            "nombre": anterior["nombre"],
+            "correo": anterior["correo"],
+            "thread_id": st.session_state.thread_id,
+        }
+    )
+
+    st.session_state.cuenta_id += 1
+    st.session_state.estudiante = ESTUDIANTE_INICIAL.copy()
+    st.session_state.thread_id = uuid.uuid4().hex
+    st.session_state.ultima_ejecucion = EJECUCION_INICIAL.copy()
+
+    # Marcador que la interfaz dibuja como una línea divisoria.
+    st.session_state.mensajes.append(
+        {
+            "role": "cambio_cuenta",
+            "content": "🔁 Cambio de cuenta: la conversación anterior queda guardada.",
+            "cuenta_id": st.session_state.cuenta_id,
+        }
+    )
+    return True
+
 
 def _asistente_pidio_nombre() -> bool:
     """Indica si el último mensaje del asistente preguntaba por el nombre."""
@@ -55,36 +121,63 @@ def _asistente_pidio_nombre() -> bool:
 
 
 def actualizar_estado_estudiante(texto: str) -> None:
-    """Detecta el correo y el primer nombre del estudiante en el texto."""
+    """Detecta correo y nombre, y cambia de cuenta cuando corresponde.
+
+    Hay cuenta nueva cuando llega un correo distinto al registrado o cuando
+    el estudiante lo pide con frases como "otra cuenta". Si solo cambia el
+    nombre y el correo es el mismo, se trata como una corrección.
+    """
     texto_limpio = texto.strip()
 
     coincidencia_correo = re.search(PATRON_CORREO, texto_limpio)
-    if coincidencia_correo:
-        st.session_state.estudiante["correo"] = coincidencia_correo.group(0)
+    correo_nuevo = coincidencia_correo.group(0) if coincidencia_correo else None
 
     # Texto sin el correo, para detectar el nombre aunque lleguen juntos.
     sin_correo = re.sub(PATRON_CORREO, "", texto_limpio).strip(" ,;:-")
+    quiere_cambiar = bool(re.search(PATRON_CAMBIO_CUENTA, texto_limpio.lower()))
+
+    correo_actual = st.session_state.estudiante["correo"]
+    correo_distinto = (
+        correo_nuevo is not None
+        and correo_actual != NO_REGISTRADO
+        and correo_nuevo.lower() != correo_actual.lower()
+    )
+    correo_igual = (
+        correo_nuevo is not None and correo_nuevo.lower() == correo_actual.lower()
+    )
+
+    if correo_distinto or (quiere_cambiar and not correo_igual):
+        iniciar_nueva_cuenta()
+
+    estudiante = st.session_state.estudiante
+
+    if correo_nuevo:
+        estudiante["correo"] = correo_nuevo
 
     coincidencia_nombre = re.search(
         PATRON_NOMBRE_EXPLICITO, sin_correo, re.IGNORECASE
     )
 
     if coincidencia_nombre:
-        st.session_state.estudiante["nombre"] = (
-            coincidencia_nombre.group(1).capitalize()
-        )
+        estudiante["nombre"] = coincidencia_nombre.group(1).capitalize()
     elif (
-        st.session_state.estudiante["nombre"] == "No registrado"
+        estudiante["nombre"] == NO_REGISTRADO
         and _asistente_pidio_nombre()
         and "correo" not in sin_correo.lower()
         and re.fullmatch(PATRON_SOLO_NOMBRE, sin_correo)
     ):
-        st.session_state.estudiante["nombre"] = sin_correo.split()[0].capitalize()
+        estudiante["nombre"] = sin_correo.split()[0].capitalize()
 
 
 def agregar_mensaje(role: str, content: str) -> None:
-    """Agrega un mensaje al historial de conversación de la sesión."""
-    st.session_state.mensajes.append({"role": role, "content": content})
+    """Agrega un mensaje al historial, marcado con la cuenta activa."""
+    st.session_state.mensajes.append(
+        {
+            "role": role,
+            "content": content,
+            "cuenta_id": st.session_state.cuenta_id,
+        }
+    )
 
 
 def registrar_ejecucion(resultado: dict) -> None:
@@ -97,22 +190,33 @@ def registrar_ejecucion(resultado: dict) -> None:
 
 
 def obtener_memoria(limite: int = 6) -> str:
-    """Devuelve los últimos mensajes como texto 'role: content'."""
-    mensajes = st.session_state.mensajes[-limite:]
+    """Devuelve los últimos mensajes de la cuenta activa como 'role: content'.
+
+    Solo incluye mensajes de la cuenta actual, para que el agente no mezcle
+    datos de una persona con los de otra.
+    """
+    mensajes = [
+        mensaje
+        for mensaje in st.session_state.mensajes
+        if mensaje["role"] in ("user", "assistant")
+        and mensaje.get("cuenta_id", 0) == st.session_state.cuenta_id
+    ]
 
     return "\n".join(
-        f"{mensaje['role']}: {mensaje['content']}" for mensaje in mensajes
+        f"{mensaje['role']}: {mensaje['content']}" for mensaje in mensajes[-limite:]
     )
 
 
 def reiniciar_estado() -> None:
-    """Restablece la sesión y abre un hilo nuevo para el agente.
+    """Restablece toda la sesión (incluidas las cuentas archivadas).
 
-    Sin un thread_id nuevo, la pantalla se vería limpia pero el agente
-    seguiría recordando la conversación anterior.
+    Es el botón de reinicio total. Para conservar el historial al cambiar
+    de persona, se usa iniciar_nueva_cuenta().
     """
     st.session_state.mensajes = []
     st.session_state.estudiante = ESTUDIANTE_INICIAL.copy()
     st.session_state.ultima_ejecucion = EJECUCION_INICIAL.copy()
     st.session_state.thread_id = uuid.uuid4().hex
+    st.session_state.cuenta_id = 0
+    st.session_state.cuentas_anteriores = []
     st.session_state.pop("reserva_confirmada", None)

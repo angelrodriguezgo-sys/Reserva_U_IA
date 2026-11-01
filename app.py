@@ -1,16 +1,22 @@
-"""Interfaz principal del Asistente de Reserva de Espacios (Streamlit + LangGraph).
+"""Luxxon: IA de reserva de espacios universitarios (Streamlit + LangGraph).
 
-Muestra los datos del estudiante, el historial de conversación y el detalle
-de la última ejecución (ruta tomada por el enrutador y herramientas usadas),
-y conecta la entrada del usuario con el grafo de LangGraph.
+Aplicación institucional privada: solo se usa con correo institucional.
+Muestra los datos del estudiante, el historial de conversación (con las
+cuentas anteriores guardadas) y el detalle de la última ejecución, y conecta
+la entrada del usuario con el grafo.
 """
 
 import streamlit as st
 
 from config.settings import validar_configuracion
+from core.acceso import detectar_correo_no_institucional, mensaje_acceso_restringido
+from core.estilos import CARGANDO_HTML, EXITO_HTML, aplicar_estilos
 from core.session import (
+    NO_REGISTRADO,
+    acceso_permitido,
     actualizar_estado_estudiante,
     agregar_mensaje,
+    iniciar_nueva_cuenta,
     inicializar_estado,
     obtener_memoria,
     registrar_ejecucion,
@@ -19,10 +25,13 @@ from core.session import (
 from graph.workflow import responder
 
 
+# Debe ser el primer comando de Streamlit.
 st.set_page_config(
-    page_title="Reserva de Espacios",
-    page_icon="🏫",
+    page_title="Luxxon",
+    page_icon="🔶",
 )
+
+aplicar_estilos()
 
 
 # Valida que las variables necesarias para utilizar Gemini estén configuradas.
@@ -37,16 +46,14 @@ except ValueError as error:
 inicializar_estado()
 
 
-# Encabezado principal de la aplicación.
-st.title("Asistente de Reserva de Espacios")
+# Encabezado y bienvenida.
+st.markdown('<div class="lx-marca">Luxxon</div>', unsafe_allow_html=True)
+st.title("IA de reserva de espacios universitarios")
 st.caption("Universidad Católica Luis Amigó")
-st.write(
-    "Consulta espacios disponibles, reserva salas y revisa tus reservas. "
-    "Con LangGraph: enrutador, agente y múltiples herramientas."
-)
+st.write("Consulta espacios disponibles, reserva salas y revisa tus reservas.")
 
 
-# Panel lateral: datos del estudiante y detalle de la última ejecución.
+# Panel lateral: cuenta activa, última ejecución y cuentas anteriores.
 with st.sidebar:
     st.subheader("Datos del estudiante")
 
@@ -72,24 +79,48 @@ with st.sidebar:
 
     st.divider()
 
+    if st.button("Iniciar con otra cuenta"):
+        if iniciar_nueva_cuenta():
+            agregar_mensaje(
+                "assistant",
+                "Listo, guardé la conversación y los datos de la cuenta anterior. "
+                "Escribe tu nombre y tu correo institucional para continuar "
+                "con la nueva cuenta.",
+            )
+            st.rerun()
+        else:
+            st.warning("Aún no hay una cuenta activa para guardar.")
+
+    if st.session_state.cuentas_anteriores:
+        st.subheader("Cuentas anteriores")
+        for cuenta in st.session_state.cuentas_anteriores:
+            st.write(f"- {cuenta['nombre']} ({cuenta['correo']})")
+
+    st.divider()
+
     if st.button("Reiniciar conversación"):
         reiniciar_estado()
         st.rerun()
 
 
-# Renderiza el historial de mensajes almacenados en la sesión.
+# Historial de mensajes, con una línea divisoria en cada cambio de cuenta.
 for mensaje in st.session_state.mensajes:
+    if mensaje["role"] == "cambio_cuenta":
+        st.divider()
+        st.caption(mensaje["content"])
+        continue
+
     with st.chat_message(mensaje["role"]):
         st.markdown(mensaje["content"])
 
 
 # Alerta de reserva exitosa: se muestra después del rerun para que no se borre.
 if st.session_state.pop("reserva_confirmada", False):
-    st.success("✅ ¡Reserva realizada con éxito!")
+    st.markdown(EXITO_HTML, unsafe_allow_html=True)
     st.balloons()
 
 
-# Captura una nueva consulta del estudiante.
+# Nueva consulta del estudiante.
 prompt = st.chat_input(
     "Escribe tu solicitud (ej. reservar un espacio, consultar disponibilidad)..."
 )
@@ -98,25 +129,44 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # Un correo que no sea institucional no se registra (ver core/acceso.py).
+    correo_rechazado = detectar_correo_no_institucional(prompt)
+
+    # Puede archivar la cuenta activa si el mensaje trae un correo distinto
+    # o pide cambiar de cuenta; por eso va antes de guardar el mensaje.
     actualizar_estado_estudiante(prompt)
     agregar_mensaje("user", prompt)
 
-    try:
-        resultado = responder(
-            mensaje_usuario=prompt,
-            estudiante=st.session_state.estudiante,
-            memoria=obtener_memoria(),
-            thread_id=st.session_state.thread_id,
+    if correo_rechazado or not acceso_permitido():
+        # Sin correo institucional no se llama al agente: es una app privada.
+        nombre = st.session_state.estudiante["nombre"]
+        respuesta = mensaje_acceso_restringido(
+            correo_rechazado=correo_rechazado is not None,
+            nombre="" if nombre == NO_REGISTRADO else nombre,
         )
-        respuesta = resultado["respuesta"]
-        registrar_ejecucion(resultado)
+    else:
+        with st.chat_message("assistant"):
+            # La animación de figuras se muestra mientras el grafo responde.
+            cargando = st.empty()
+            cargando.markdown(CARGANDO_HTML, unsafe_allow_html=True)
 
-        if resultado.get("reserva_exitosa"):
-            st.session_state.reserva_confirmada = True
+            try:
+                resultado = responder(
+                    mensaje_usuario=prompt,
+                    estudiante=st.session_state.estudiante,
+                    memoria=obtener_memoria(),
+                    thread_id=st.session_state.thread_id,
+                )
+                respuesta = resultado["respuesta"]
+                registrar_ejecucion(resultado)
 
-    except Exception as error:
-        respuesta = f"Ocurrió un error al procesar la solicitud: {error}"
+                if resultado.get("reserva_exitosa"):
+                    st.session_state.reserva_confirmada = True
 
-    # El historial se vuelve a dibujar tras el rerun, con la respuesta incluida.
+            except Exception as error:
+                respuesta = f"Ocurrió un error al procesar la solicitud: {error}"
+
+            cargando.empty()
+
     agregar_mensaje("assistant", respuesta)
     st.rerun()
